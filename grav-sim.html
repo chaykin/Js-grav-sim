@@ -1,0 +1,185 @@
+<html>
+	<head>
+		<link rel="stylesheet" href="css/style.css" type="text/css">
+		<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	</head>
+	<body>
+		<form>
+			<div id="main">
+				<div id="controlPanel">
+					<div class="aboutRow">
+					</div>
+					<div>
+						<div class="fieldName">
+							<span title="Фиксирует объект в центре экрана">Следить за:</span>
+						</div>
+						<div class="fieldVal">
+							<select class="fillParent" onchange="onBodyFocusChanged(this);">
+								<option selected value="sun">Солнце</option>
+								<option value="earth">Земля</option>
+							</select>
+						</div>
+					</div>
+					<div>
+						<div class="fieldName">
+							<span title="Однократно изменяет величину мгновенного вектора скорости, сохраняя направление">Скорость:</span>
+						</div>
+						<div class="fieldVal">
+							<table width="100%">
+								<tr>
+									<td>
+										<select id="forceForPlanet" class="fillParent">
+											<option value="earth">Земля</option>
+										</select>
+									</td>
+									<td>
+										<input class="btn" type="button" style="width:60px" value="-5%" onClick="changeVelocity(-5);"/>
+									</td>
+									<td>
+										<input class="btn" type="button" style="width:60px" value="+5%" onClick="changeVelocity(5);"/>
+									</td>
+								</tr>
+							</table>
+						</div>
+					</div>
+					<div>
+						<div class="fieldName">
+							<span title="Изменяет масштаб">Масштаб:</span>
+						</div>
+						<div class="fieldVal">
+							<table width="100%">
+								<tr>
+									<td>
+										<input class="btn" type="button" style="width:100px" value="-" onClick="zoom(-5);"/>
+									</td>
+									<td>
+										<input class="btn" type="button" style="width:100px" value="+" onClick="zoom(5);"/>
+									</td>
+								</tr>
+							</table>
+						</div>
+					</div>
+					<div class="centered space">
+						<input id="startSimBtn" class="btn" style="display: none;" type="button" value="Продолжить" onClick="startSim();"/>
+						<input id="stopSimBtn" class="btn" type="button" value="Остановить симуляцию" onClick="stopSim();"/>
+					</div>
+				</div>
+				
+				<div id="content">
+					<div class="bordered">
+						<canvas id="cnv">Browser not supported</canvas>
+					</div>
+					<div id="mode"></div>
+					<div id="earthForce"></div>
+					<div id="sunForce"></div>
+				</div>
+			</div>
+		</form>
+
+		<script type="text/javascript" src="js/dom-utils.js"></script>
+		<script type="text/javascript" src="js/color-utils.js"></script>
+		<script type="text/javascript" src="js/body.js"></script>
+		<script type="text/javascript" src="js/phys-quantities.js"></script>
+		<script type="text/javascript" src="js/phys-consts.js"></script>
+		<script type="text/javascript" src="js/phys-body-start.js"></script>
+		<script type="text/javascript" src="js/phys-sim.js"></script>
+		<script type="text/javascript" src="js/sim-utils.js"></script>
+		<script type="text/javascript" src="js/canvas-utils.js"></script>
+		<script type="text/javascript">
+			var cnv = $('cnv');
+			var ctx = $('cnv').getContext('2d');
+
+			var simulator = null;
+			var canvasTransformer = null;
+			var zoomData = [];
+
+			function onBodyFocusChanged(tag) {
+				var value = tag.options[tag.selectedIndex].value;
+				if (value === "sun") {
+					canvasTransformer.focusTarget(sun);
+				} else if (value === "earth") {
+					canvasTransformer.focusTarget(earth);
+				}
+			}
+
+			function changeVelocity(valPercent) {
+				var planet = null;
+				var velocity = null;
+				var value = $("forceForPlanet").options[$("forceForPlanet").selectedIndex].value;
+				if (value === "earth") {
+					planet = earth;
+					velocity = Vauearth;
+				}
+
+				simulator.changeVelocity(planet, velocity * valPercent / 100.0);
+			}
+
+			function zoom(value) {
+				var dZoom = zoomData[this.canvasTransformer.targetBody.bodyName] * value / 100.0;
+				while (this.canvasTransformer.zoom <= Math.abs(2 * dZoom)) {
+					dZoom /= 2;
+				}
+				this.canvasTransformer.zoom += dZoom;
+				if (this.canvasTransformer.zoom < 10) {
+					this.canvasTransformer.zoom = 10;
+				}
+			}
+
+			function drawScene() {
+				ctx.clearRect(0, 0, cnv.width, cnv.height);
+				ctx.fillStyle = "#000000";
+				ctx.fillRect(0, 0, cnv.width, cnv.height);
+
+				drawBody(sun);
+				drawBody(earth);
+
+				drawLink(sun, earth);
+				
+				requestAnimationFrame(drawScene);
+			}
+
+			function initSim() {
+				cnv.width = cnv.offsetWidth;
+				cnv.height = cnv.offsetHeight;
+
+				simulator = new Simulator([sun, earth]);
+				canvasTransformer = new CanvasTransformer(cnv);
+				canvasTransformer.focusTarget(sun);
+				zoomInit();
+
+				$("content").addEventListener("wheel", function(e) {
+					e = e || window.event;
+					var delta = e.deltaY || e.detail || e.wheelDelta;
+					zoom(delta > 0 ? -5 : 5);
+				});
+			}
+
+			function zoomInit() {
+				zoomData[sun.bodyName] = this.canvasTransformer.calcZoom(earth.distance(sun));
+			}
+
+			function startSim() {
+				hideTag("startSimBtn");
+				inlineTag("stopSimBtn");
+
+				cnv.width = cnv.offsetWidth;
+				cnv.height = cnv.offsetHeight;
+
+				drawScene();
+				invervalId = setInterval(function() {
+					simulator.next();
+				}, 8);
+				
+			}
+
+			function stopSim() {
+				inlineTag("startSimBtn");
+				hideTag("stopSimBtn");
+				clearInterval(invervalId);
+			}
+
+			initSim();
+			startSim();
+		</script>
+	</body>
+</html>
